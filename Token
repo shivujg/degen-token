@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.18;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract DeviceContract {
+    uint256 public fee;
+
+    constructor(uint256 _fee) {
+        fee = _fee;
+    }
+}
+
+contract DegenToken is ERC20, Ownable(msg.sender) {
+    event DeviceRedeemed(address indexed account, address deviceContract, uint256 total);
+
+    mapping(string => address) public devices;
+    mapping(address => string) public redeemerSelectedDevices;
+
+    constructor() ERC20("DegenToken", "DTK") {}
+
+    function createDevice(string memory deviceName, uint256 fee) external onlyOwner {
+        require(fee > 0, "Device fee must be greater than zero");
+
+        DeviceContract deviceContract = new DeviceContract(fee);
+        devices[deviceName] = address(deviceContract);
+    }
+
+    function redeemDevice(string memory deviceName) external payable {
+        address deviceAddress = devices[deviceName];
+        require(deviceAddress != address(0), "Invalid device selected");
+
+        DeviceContract deviceContract = DeviceContract(deviceAddress);
+        uint256 deviceFee = deviceContract.fee();
+    
+        _burn(msg.sender, deviceFee);  // Deduct tokens from the redeemer
+
+        payable(owner()).transfer(msg.value); // Transfer funds to the contract owner
+        redeemerSelectedDevices[msg.sender] = deviceName;
+
+        emit DeviceRedeemed(msg.sender, deviceAddress, deviceFee);
+    }
+
+    function transferTokens(address recipient, uint256 amount) external {
+        require(recipient != address(0), "Invalid recipient address provided");
+        require(balanceOf(msg.sender) >= amount, "Insufficient funds for token transfer");
+        _transfer(msg.sender, recipient, amount);
+    }
+
+    function mint(address to, uint256 amount) external onlyOwner {
+        _mint(to, amount);
+    }
+
+    function burn(uint256 amount) external {
+        require(amount > 0, "Amount to burn must be greater than zero");
+        require(balanceOf(msg.sender) >= amount, "Insufficient funds for token burning");
+        _burn(msg.sender, amount);
+    }
+}
